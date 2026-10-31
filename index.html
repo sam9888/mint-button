@@ -40,21 +40,33 @@
 </main>
 <script>
   const q = new URLSearchParams(location.search);
-  const to = (q.get("to") || "").toLowerCase(), data = (q.get("data") || "").toLowerCase(), want = (q.get("w") || "").toLowerCase();
+  // m = base64url JSON {to,data,name,w}: one param, so the URL survives being nested inside Binance's deep link
+  let p = {};
+  try { p = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob((q.get("m") || "").replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0)))); } catch (e) {}
+  const get = k => p[k] || q.get(k) || "";
+  const to = get("to").toLowerCase(), data = get("data").toLowerCase(), want = get("w").toLowerCase();
+  // Binance's own format (@binance/w3w-utils getDeepLink): opens a URL in the Binance app's wallet browser on BNB Chain
+  const binanceLink = url => "https://app.binance.com/en/download?_dp=" + btoa("bnc://app.binance.com/mp/app?appId=yFK5FCqYprrXDiVFbhyRx7&startPagePath="
+    + btoa("/pages/browser/index") + "&startPageQuery=" + btoa("url=" + url + "&defaultChainId=56"));
   // approve, setApprovalForAll, transfer, transferFrom, safeTransferFrom x2, increaseAllowance, permit
   const DENY = ["0x095ea7b3", "0xa22cb465", "0xa9059cbb", "0x23b872dd", "0x42842e0e", "0xb88d4fde", "0x39509351", "0xd505accf"];
   const $ = id => document.getElementById(id), say = (t, c) => { $("msg").className = c || ""; $("msg").textContent = t; };
-  $("name").textContent = q.get("name") || "Mint";
+  $("name").textContent = get("name") || "Mint";
   $("to").textContent = to; $("link").href = "https://bscscan.com/address/" + to; $("sel").textContent = data.slice(0, 10);
 
   const bad = !/^0x[0-9a-f]{40}$/.test(to) ? "Bad contract address in link."
             : !/^0x[0-9a-f]{8}([0-9a-f]{2})*$/.test(data) ? "Bad mint data in link."
             : DENY.includes(data.slice(0, 10)) ? "Blocked: this link asks for an approval or transfer, not a mint." : "";
   if (bad) say(bad, "bad");
-  else if (!window.ethereum) say("No wallet here. Open this link inside the Binance app (Wallet → Discover) or MetaMask's browser.", "bad");
+  else if (!window.ethereum) {
+    $("go").textContent = "Open in Binance app";
+    $("go").disabled = false;
+    say("No wallet in this browser. Tap the button to open this mint in the Binance app.");
+  }
   else $("go").disabled = false;
 
   $("go").onclick = async () => {
+    if (!window.ethereum) return void (location.href = binanceLink(location.href));
     $("go").disabled = true;
     try {
       const [from] = await ethereum.request({ method: "eth_requestAccounts" });
