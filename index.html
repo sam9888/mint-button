@@ -45,9 +45,6 @@
   try { p = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob((q.get("m") || "").replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0)))); } catch (e) {}
   const get = k => p[k] || q.get(k) || "";
   const to = get("to").toLowerCase(), data = get("data").toLowerCase(), want = get("w").toLowerCase();
-  // Binance's own format (@binance/w3w-utils getDeepLink): opens a URL in the Binance app's wallet browser on BNB Chain
-  const binanceLink = url => "https://app.binance.com/en/download?_dp=" + btoa("bnc://app.binance.com/mp/app?appId=yFK5FCqYprrXDiVFbhyRx7&startPagePath="
-    + btoa("/pages/browser/index") + "&startPageQuery=" + btoa("url=" + url + "&defaultChainId=56"));
   // approve, setApprovalForAll, transfer, transferFrom, safeTransferFrom x2, increaseAllowance, permit
   const DENY = ["0x095ea7b3", "0xa22cb465", "0xa9059cbb", "0x23b872dd", "0x42842e0e", "0xb88d4fde", "0x39509351", "0xd505accf"];
   const $ = id => document.getElementById(id), say = (t, c) => { $("msg").className = c || ""; $("msg").textContent = t; };
@@ -59,14 +56,18 @@
             : DENY.includes(data.slice(0, 10)) ? "Blocked: this link asks for an approval or transfer, not a mint." : "";
   if (bad) say(bad, "bad");
   else if (!window.ethereum) {
-    $("go").textContent = "Open in Binance app";
+    $("go").textContent = "Copy link for Binance app";
     $("go").disabled = false;
-    say("No wallet in this browser. Tap the button to open this mint in the Binance app.");
+    say("No wallet in this browser. Copy the link, then in the Binance app go to Wallet → Discover and paste it in the search bar.");
   }
   else $("go").disabled = false;
 
   $("go").onclick = async () => {
-    if (!window.ethereum) return void (location.href = binanceLink(location.href));
+    if (!window.ethereum) {
+      try { await navigator.clipboard.writeText(location.href); }
+      catch (e) { const t = document.createElement("textarea"); t.value = location.href; document.body.append(t); t.select(); document.execCommand("copy"); t.remove(); }
+      return say("Copied ✓  Now open Binance → Wallet → Discover, paste in the search bar, then tap Mint there.", "ok");
+    }
     $("go").disabled = true;
     try {
       const [from] = await ethereum.request({ method: "eth_requestAccounts" });
