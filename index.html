@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One-Tap Mint</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#15171a; --muted:#5f6670; --accent:#f0b90b; --ok:#1a7f37; --bad:#c62828; --line:#e3e6ea; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0e1013; --card:#181b20; --text:#eef0f3; --muted:#9aa3ad; --line:#2a2f36; --ok:#4ac26b; --bad:#ff6b6b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  main { max-width:440px; margin:0 auto; padding:24px 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; }
+  h1 { font-size:20px; margin:0 0 4px; word-break:break-word; }
+  .muted { color:var(--muted); font-size:14px; }
+  .row { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .row:last-of-type { border-bottom:0; }
+  code { font-size:12px; word-break:break-all; }
+  button { width:100%; margin-top:16px; padding:14px; border:0; border-radius:10px; background:var(--accent); color:#111; font-size:17px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  #msg { margin-top:14px; font-size:14px; word-break:break-word; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+  a { color:inherit; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <h1 id="name">Mint</h1>
+    <div class="muted">BNB Chain · you confirm in your own wallet</div>
+    <div style="margin-top:14px">
+      <div class="row"><span>Contract</span><a id="link" target="_blank" rel="noopener"><code id="to"></code></a></div>
+      <div class="row"><span>Price</span><b>0 BNB (only gas)</b></div>
+      <div class="row"><span>Function</span><code id="sel"></code></div>
+    </div>
+    <button id="go" disabled>Mint</button>
+    <div id="msg"></div>
+    <p class="muted" style="margin-top:16px">This page always sends 0 BNB and refuses approve / transfer calls. Your wallet still shows the transaction: if it shows any BNB amount or an approval, reject it.</p>
+  </div>
+</main>
+<script>
+  const q = new URLSearchParams(location.search);
+  const to = (q.get("to") || "").toLowerCase(), data = (q.get("data") || "").toLowerCase(), want = (q.get("w") || "").toLowerCase();
+  // approve, setApprovalForAll, transfer, transferFrom, safeTransferFrom x2, increaseAllowance, permit
+  const DENY = ["0x095ea7b3", "0xa22cb465", "0xa9059cbb", "0x23b872dd", "0x42842e0e", "0xb88d4fde", "0x39509351", "0xd505accf"];
+  const $ = id => document.getElementById(id), say = (t, c) => { $("msg").className = c || ""; $("msg").textContent = t; };
+  $("name").textContent = q.get("name") || "Mint";
+  $("to").textContent = to; $("link").href = "https://bscscan.com/address/" + to; $("sel").textContent = data.slice(0, 10);
+
+  const bad = !/^0x[0-9a-f]{40}$/.test(to) ? "Bad contract address in link."
+            : !/^0x[0-9a-f]{8}([0-9a-f]{2})*$/.test(data) ? "Bad mint data in link."
+            : DENY.includes(data.slice(0, 10)) ? "Blocked: this link asks for an approval or transfer, not a mint." : "";
+  if (bad) say(bad, "bad");
+  else if (!window.ethereum) say("No wallet here. Open this link inside the Binance app (Wallet → Discover) or MetaMask's browser.", "bad");
+  else $("go").disabled = false;
+
+  $("go").onclick = async () => {
+    $("go").disabled = true;
+    try {
+      const [from] = await ethereum.request({ method: "eth_requestAccounts" });
+      if (want && from.toLowerCase() !== want) say("Heads up: this isn't the wallet the bot checked (" + want.slice(0, 8) + "…).", "bad");
+      if ((await ethereum.request({ method: "eth_chainId" })) !== "0x38")
+        await ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
+      const hash = await ethereum.request({ method: "eth_sendTransaction", params: [{ from, to, data, value: "0x0" }] });
+      $("msg").className = "ok";
+      $("msg").innerHTML = 'Sent. <a target="_blank" rel="noopener" href="https://bscscan.com/tx/' + hash + '">View on BscScan</a> (don\'t resend while it\'s pending)';
+    } catch (e) {
+      say(e && e.code === 4001 ? "Cancelled in wallet." : "Failed: " + (e && e.message || e), "bad");
+      $("go").disabled = false;
+    }
+  };
+</script>
+</body>
+</html>
